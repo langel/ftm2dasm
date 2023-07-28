@@ -9,3 +9,10 @@ At first I thought cli php would be a good interface. Then I thought maybe a com
 
 ## Supported Famitracker Features
 Coming soon!
+
+## Current Targeted Features
+- 150 tempo locked
+- pattern volume column
+- 1xx 2xx 4xx Fxx Pxx Sxx Vxx
+- instrument volume + duty envelopes
+- sfx priority (end with C00 or E00)
