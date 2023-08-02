@@ -1,21 +1,31 @@
 
-let tohex = (x) => x.toString(16).padStart(2, '0'); 
+const notes = [ 'C-', 'C#', 'D-', 'D#', 'E-', 'F-' ,'F#', 'G-' ,'G#', 'A-', 'A#', 'B' ];
+const tohex = (x) => x.toString(16).padStart(2, '0'); 
 
 let output = {};
+let data = {};
 let inst = [];
+let track = [];
+let track_id = -1;
 
-const ftm_process = (file, data) => {
-	let lines = data.split(/\r?\n/);
-	lines.forEach((line, i) => {
+const ftm_process = (file, input) => {
+	data.lines = input.split(/\r?\n/);
+	data.length = data.lines.length;
+	data.i = 0;
+	while (data.i < data.length) {
+		let line = data.lines[data.i];
+		console.log(data.i + ' ' + line);
 		let luc = line.trim().toUpperCase();
-		if (luc == '# DPCM SAMPLES') ftm_process_dpcm(lines, i);
-		if (luc == '# INSTRUMENTS') ftm_process_instruments(lines, i);
-		if (luc == '# MACROS') ftm_process_macros(lines, i);
-		if (luc == 'PATTERN 0A') ftm_process_pattern(lines, i);
-	});
+		if (luc == '# DPCM SAMPLES') ftm_process_dpcm();
+		if (luc == '# INSTRUMENTS') ftm_process_instruments();
+		if (luc == '# MACROS') ftm_process_macros();
+		if (luc.substring(0, 7)  == 'PATTERN') ftm_process_pattern();
+		if (luc.substring(0, 5)  == 'TRACK') ftm_process_track();
+		data.i++;
+	}
 }
 
-const ftm_process_dpcm = (lines, i) => {
+const ftm_process_dpcm = () => {
 	let out = '';
 	let length = 0;
 	let lengths = [];
@@ -24,8 +34,8 @@ const ftm_process_dpcm = (lines, i) => {
 	let line_counts = [];
 	// rip them samples
 	do {
-		i++;
-		let line = lines[i];
+		data.i++;
+		let line = data.lines[data.i];
 		if (line.indexOf('DPCMDEF') == 0 || line == '') {
 			if (length % 64 != 0) {
 				let fill = length % 64;
@@ -52,7 +62,7 @@ const ftm_process_dpcm = (lines, i) => {
 			out += '\n hex ' + data;
 			line_count++;
 		}
-	} while (lines[i] !== '');
+	} while (data.lines[data.i] !== '');
 	// create look up tables
 	out += "ftm_dpcm_len:\n hex ";
 	lengths.forEach(x => out += tohex(Math.ceil(x / 16)));
@@ -62,11 +72,12 @@ const ftm_process_dpcm = (lines, i) => {
 	output.dpcm = out;
 }
 
-const ftm_process_instruments = (lines, i) => {
+const ftm_process_instruments = () => {
 	let inst_count = -1;
 	do {
-		i++;
-		let line = lines[i];
+		data.i++;
+		let line = data.lines[data.i];
+		console.log(line);
 		let args = line.split(' ').filter(n => n);
 		if (args[0] == 'INST2A03') {
 			inst.push({});
@@ -81,7 +92,7 @@ const ftm_process_instruments = (lines, i) => {
 				freq: args[5],
 			});
 		}
-	} while (lines[i] !== '');
+	} while (data.lines[data.i] !== '');
 	console.log(inst[0].dpcm);
 	let samp_out = 'ftm_dpcm_samp_table: \n hex ';
 	let freq_out = 'ftm_dpcm_freq_table: \n hex ';
@@ -94,14 +105,15 @@ const ftm_process_instruments = (lines, i) => {
 	console.log(inst[0].dpcm);
 }
 
-const ftm_process_macros = (lines, i) => {
+const ftm_process_macros = () => {
 }
-const notes = [ 'C-', 'C#', 'D-', 'D#', 'E-', 'F-' ,'F#', 'G-' ,'G#', 'A-', 'A#', 'B' ];
-const ftm_process_pattern = (lines, i) => {
+
+let counter = 0;
+const ftm_process_pattern = () => {
 	let patt = [];
 	do {
-		i++;
-		let line = lines[i];
+		data.i++;
+		let line = data.lines[data.i];
 		if (line == '') break;
 		let args = line.split(':');
 		let dpcm = args[5];
@@ -114,13 +126,38 @@ const ftm_process_pattern = (lines, i) => {
 			let i = inst[0].dpcm.findIndex((x) => x.trig === note);
 			patt.push(i);
 		}
-	} while (lines[i] !== '');
+	} while (data.lines[data.i] !== '');
 	let out = 'ftm_pattern: ';
 	patt.forEach((x, i) => {
 		if (i % 32 == 0) out += '\n hex ';
 		out += tohex(x);
 	});
+	console.log(counter);
+	counter++;
 	console.log(out);
+}
+
+const ftm_process_track = () => {
+	// track data
+	let line = data.lines[data.i];
+	let args = line.replace(/ +(?= )/g,'').split(' ');
+	track_id++;
+	let title = args.slice(4).join(' ').substr(1);
+	title = title.substr(0, title.length - 1);
+	track = {
+		id: track_id,
+		rows: args[1],
+		speed: args[2],
+		tempo: args[3],
+		title: title,
+	};
+	// effects columns per channel
+	data.i++;
+	line = data.lines[data.i];
+	args = line.replace(/ +(?= )/g,'').split(' ');
+	track.columns = args.slice(2);
+	// song order data
+	console.log(track);
 }
 
 window.addEventListener("DOMContentLoaded", () => {
