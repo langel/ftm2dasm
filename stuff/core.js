@@ -132,23 +132,26 @@ const ftm_process_pattern = () => {
 		}
 	} while (data.lines[data.i] !== '');
 	// loop over data and output exportable data
-	let pattern_id = track.orders[4][track.row_counter];
-	let ref_id =  track.pattern_keys[4].indexOf(pattern_id);
-	ref_id = tohex(ref_id);
-	console.log('pattern: ' + pattern_id);
-	if (typeof track.pattern_data[4][pattern_id] == 'undefined') {
-		let rows = [];
-		let out = '\nftm_track_' + track.id + '_chan_4_pattern_';
-		out += ref_id + ': ';
-		patt.forEach((x, i) => {
-			rows.push(x);
-			if (i % 32 == 0) out += '\n\thex ';
-			out += tohex(x);
-		});
-		track.pattern_data[4][pattern_id] = rows;
-		output['track_' + track.id] += out;
-		console.log(out);
+	if (track.row_counter < track.order_length) {
+		let pattern_id = track.orders[4][track.row_counter];
+		let ref_id =  track.pattern_keys[4].indexOf(pattern_id);
+		ref_id = tohex(ref_id);
+		if (typeof track.pattern_data[4][pattern_id] == 'undefined') {
+			let rows = [];
+			let out = '\nftm_track_' + track.id + '_chan_4_pattern_';
+			out += ref_id + ': ';
+			patt.forEach((x, i) => {
+				rows.push(x);
+				if (i % 32 == 0) out += '\n\thex ';
+				out += tohex(x);
+			});
+			track.pattern_data[4][pattern_id] = rows;
+			output['track_' + track.id] += out;
+			console.log(out);
+		}
 	}
+	// pattern lookup tables
+	// XXX should be in its own function but not sure how to trigger
 	let table_hi = 'ftm_track_' + track.id + '_chan_4_patterns_hi:\n';
 	let table_lo = 'ftm_track_' + track.id + '_chan_4_patterns_lo:\n';
 	track.pattern_keys[4].forEach((x, i) => {
@@ -157,7 +160,6 @@ const ftm_process_pattern = () => {
 		table_lo += '\tbyte <' + label + '\n';
 	});
 	output['track_' + track.id + '_pattern_tables'] = table_lo + table_hi;
-	console.log(track.row_counter);
 	track.row_counter++;
 }
 
@@ -172,10 +174,10 @@ const ftm_process_track = () => {
 		id: track_id,
 		orders: [ [], [], [], [], [] ],
 		pattern_data: [ [], [], [], [], [] ],
-		pattern_sets: [ new Set(), new Set(), new Set(), new Set(), new Set() ],
 		pattern_keys: [ [], [], [], [], [] ],
+		pattern_length: args[1],
+		pattern_sets: [ new Set(), new Set(), new Set(), new Set(), new Set() ],
 		row_counter: 1,
-		rows: args[1],
 		speed: args[2],
 		tempo: args[3],
 		title: title,
