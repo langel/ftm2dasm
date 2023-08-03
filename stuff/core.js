@@ -2,7 +2,8 @@
 const notes = [ 'C-', 'C#', 'D-', 'D#', 'E-', 'F-' ,'F#', 'G-' ,'G#', 'A-', 'A#', 'B' ];
 const tohex = (x) => x.toString(16).padStart(2, '0'); 
 
-let output = {};
+let output;
+let outtarg;
 let data = {};
 let inst = [];
 let track = [];
@@ -23,6 +24,12 @@ const ftm_process = (file, input) => {
 		if (luc.substring(0, 5)  == 'TRACK') ftm_process_track();
 		data.i++;
 	}
+	delete output.dpcm;
+	Object.entries(output).forEach((out) => {
+		const [key, val] = out;
+		outtarg.innerHTML += '<h3>' + key + '</h3>';
+		outtarg.innerHTML += '<pre>' + val + '</pre>';	
+	});
 }
 
 const ftm_process_dpcm = () => {
@@ -41,7 +48,7 @@ const ftm_process_dpcm = () => {
 				let fill = length % 64;
 				for (let i = fill; i < 64; i++) {
 					if (i % 32 == 0) {
-						out += '\n hex ';
+						out += '\n\thex ';
 						line_count++;
 					}
 					out += '00';
@@ -59,17 +66,17 @@ const ftm_process_dpcm = () => {
 		if (line.indexOf('DPCM : ') == 0) {
 			let data = line.slice(7).replace(/\s/g, '').toLowerCase().trim();
 			length += data.length / 2;
-			out += '\n hex ' + data;
+			out += '\n\thex ' + data;
 			line_count++;
 		}
 	} while (data.lines[data.i] !== '');
 	// create look up tables
-	out += "ftm_dpcm_len:\n hex ";
-	lengths.forEach(x => out += tohex(Math.ceil(x / 16)));
-	out += "\nftm_dpcm_addr:\n hex ";
-	line_counts.forEach(x => out += tohex(Math.ceil(x / 2)));
-//	console.log(out);
-	output.dpcm = out;
+	let dat = '';
+	dat += "ftm_dpcm_len:\n\thex ";
+	lengths.forEach(x => dat += tohex(Math.ceil(x / 16)));
+	dat += "\nftm_dpcm_addr:\n\thex ";
+	line_counts.forEach(x => dat += tohex(Math.ceil(x / 2)));
+	output.dpcm = dat + '\n\n' + out;
 }
 
 const ftm_process_instruments = () => {
@@ -93,24 +100,21 @@ const ftm_process_instruments = () => {
 			});
 		}
 	} while (data.lines[data.i] !== '');
-	console.log(inst[0].dpcm);
-	let samp_out = 'ftm_dpcm_samp_table: \n hex ';
-	let freq_out = 'ftm_dpcm_freq_table: \n hex ';
+	let samp_out = 'ftm_dpcm_samp_table: \n\thex ';
+	let freq_out = 'ftm_dpcm_freq_table: \n\thex ';
 	inst[0].dpcm.forEach(x => {
 		samp_out += tohex(parseInt(x.samp));
 		freq_out += tohex(parseInt(x.freq));
-		console.log('freq: ' + x.freq);
 	});
-	console.log(samp_out + '\n' + freq_out);
-	console.log(inst[0].dpcm);
+	//console.log(samp_out + '\n' + freq_out);
 }
 
 const ftm_process_macros = () => {
 }
 
-let counter = 0;
 const ftm_process_pattern = () => {
 	let patt = [];
+	// loop over entire pattern and acquire all data
 	do {
 		data.i++;
 		let line = data.lines[data.i];
@@ -127,14 +131,34 @@ const ftm_process_pattern = () => {
 			patt.push(i);
 		}
 	} while (data.lines[data.i] !== '');
-	let out = 'ftm_pattern: ';
-	patt.forEach((x, i) => {
-		if (i % 32 == 0) out += '\n hex ';
-		out += tohex(x);
+	// loop over data and output exportable data
+	let pattern_id = track.orders[4][track.row_counter];
+	let ref_id =  track.pattern_keys[4].indexOf(pattern_id);
+	ref_id = tohex(ref_id);
+	console.log('pattern: ' + pattern_id);
+	if (typeof track.pattern_data[4][pattern_id] == 'undefined') {
+		let rows = [];
+		let out = '\nftm_track_' + track.id + '_chan_4_pattern_';
+		out += ref_id + ': ';
+		patt.forEach((x, i) => {
+			rows.push(x);
+			if (i % 32 == 0) out += '\n\thex ';
+			out += tohex(x);
+		});
+		track.pattern_data[4][pattern_id] = rows;
+		output['track_' + track.id] += out;
+		console.log(out);
+	}
+	let table_hi = 'ftm_track_' + track.id + '_chan_4_patterns_hi:\n';
+	let table_lo = 'ftm_track_' + track.id + '_chan_4_patterns_lo:\n';
+	track.pattern_keys[4].forEach((x, i) => {
+		let label = '#ftm_track_' + track.id + '_chan_4_pattern_' + tohex(i);
+		table_hi += '\tbyte >' + label + '\n';
+		table_lo += '\tbyte <' + label + '\n';
 	});
-	console.log(counter);
-	counter++;
-	console.log(out);
+	output['track_' + track.id + '_pattern_tables'] = table_lo + table_hi;
+	console.log(track.row_counter);
+	track.row_counter++;
 }
 
 const ftm_process_track = () => {
@@ -146,6 +170,11 @@ const ftm_process_track = () => {
 	title = title.substr(0, title.length - 1);
 	track = {
 		id: track_id,
+		orders: [ [], [], [], [], [] ],
+		pattern_data: [ [], [], [], [], [] ],
+		pattern_sets: [ new Set(), new Set(), new Set(), new Set(), new Set() ],
+		pattern_keys: [ [], [], [], [], [] ],
+		row_counter: 1,
 		rows: args[1],
 		speed: args[2],
 		tempo: args[3],
@@ -157,20 +186,51 @@ const ftm_process_track = () => {
 	args = line.replace(/ +(?= )/g,'').split(' ');
 	track.columns = args.slice(2);
 	// song order data
+	data.i += 2;
+	let order_length = 0;
+	let out = 'ftm_track_' + track.id + '_order:\n';
+	do {
+		line = data.lines[data.i];
+		args = line.substr(11).split(' ');
+		args.forEach((a, i) => {
+			track.orders[i].push(a);
+			track.pattern_sets[i].add(a);
+		});
+		data.i++;
+		order_length++;
+	} while (data.lines[data.i] !== '');
+	console.log('order_length: ' + order_length);
+	// setup reference keys
+	for (let i = 0; i < 5; i++) {
+		track.pattern_keys[i] = [...track.pattern_sets[i]];
+	}
+	// output pattern references
+	for (let i = 0; i < order_length; i++) {
+		out += '\thex ';	
+		for (let chan = 0; chan < 5; chan++) {
+			let val = track.pattern_keys[chan].indexOf(track.orders[chan][i]);
+			out += tohex(parseInt(val));
+		}
+		out += '\n';
+	}
+	track.order_length = order_length;
 	console.log(track);
+	output['track_' + track.id] = out;
 }
 
 window.addEventListener("DOMContentLoaded", () => {
 	const cont = document.getElementById("containment");
 	const droptarg = document;
-	const output = document.getElementById("output");
 	const domp = new DOMParser();
 	const br = "<br>";
+	outtarg = document.getElementById("output");
 	// drop handler
 	droptarg.addEventListener("drop", (e) => {
 		e.preventDefault();
 		cont.classList.remove("dragover");
-		output.innerHTML = '';
+		output = {};
+		outtarg.innerHTML = '';
+		track_id = -1;
 		[...e.dataTransfer.items].forEach((item, i) => {
 			if (item.kind === 'file') {
 				const file = item.getAsFile();

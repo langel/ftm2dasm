@@ -10,6 +10,11 @@ At first I thought cli php would be a good interface. Then I thought maybe a com
 ## Supported Famitracker Features
 Coming soon!
 
+## Limitations
+Max Song Length: 51 (255 / 5 channels)
+Max Macros: 
+Max Channel Patterns: 254 (0xFF empty pattern)
+
 ## Current Targeted Features
 - 150 tempo locked
 - pattern volume column
