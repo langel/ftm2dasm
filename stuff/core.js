@@ -114,13 +114,31 @@ const ftm_process_macros = () => {
 
 const ftm_process_pattern = () => {
 	let patt = [];
+	let patterns = [ [], [], [], [], [] ];
 	// loop over entire pattern and acquire all data
 	do {
 		data.i++;
 		let line = data.lines[data.i];
 		if (line == '') break;
-		let args = line.split(':');
-		let dpcm = args[5];
+		let args = line.split(':').splice(1);
+		args.forEach((line, chan) => {
+			let args = line.split(' ');
+			if (args[1] == '...') patterns[chan].push(0xff);
+			else if (args[1] == '---') patterns[chan].push(0xfe);
+			else if (args[1] == '===') patterns[chan].push(0xfd);
+			else {
+				let val = parseInt(notes.indexOf(args[1].slice(0, 2)), 10) + args[1].slice(2) * 12;
+				if (chan == 3) {
+					val = parseInt(args[1].slice(0, 1), 16);
+				}
+				if (chan == 4) {
+					val = inst[parseInt(args[2])].dpcm.findIndex((x) => x.trig === val);
+				}
+				patterns[chan].push(val);
+			}
+		});
+		// XXX delete this
+		let dpcm = args[4];
 		args = dpcm.split(' ');
 		if (args[1] == '...') {
 			patt.push(0xff);
@@ -132,24 +150,27 @@ const ftm_process_pattern = () => {
 		}
 	} while (data.lines[data.i] !== '');
 	// loop over data and output exportable data
-	if (track.row_counter < track.order_length) {
-		let pattern_id = track.orders[4][track.row_counter];
-		let ref_id =  track.pattern_keys[4].indexOf(pattern_id);
-		ref_id = tohex(ref_id);
-		if (typeof track.pattern_data[4][pattern_id] == 'undefined') {
-			let rows = [];
-			let out = '\nftm_track_' + track.id + '_chan_4_pattern_';
-			out += ref_id + ': ';
-			patt.forEach((x, i) => {
-				rows.push(x);
-				if (i % 32 == 0) out += '\n\thex ';
-				out += tohex(x);
-			});
-			track.pattern_data[4][pattern_id] = rows;
-			output['track_' + track.id] += out;
-			console.log(out);
+	for (let chan = 0; chan < 5; chan++) {
+		if (track.row_counter < track.order_length) {
+			let pattern_id = track.orders[chan][track.row_counter];
+			let ref_id =  track.pattern_keys[chan].indexOf(pattern_id);
+			ref_id = tohex(ref_id);
+			if (typeof track.pattern_data[chan][pattern_id] == 'undefined') {
+				let rows = [];
+				let out = '\nftm_track_' + track.id + '_chan_' + chan + '_pattern_';
+				out += ref_id + ': ';
+				patt.forEach((x, i) => {
+					rows.push(x);
+					if (i % 32 == 0) out += '\n\thex ';
+					out += tohex(x);
+				});
+				track.pattern_data[chan][pattern_id] = rows;
+				output['track_' + track.id] += out;
+				console.log(out);
+			}
 		}
 	}
+	console.log(patterns);
 	// pattern lookup tables
 	// XXX should be in its own function but not sure how to trigger
 	let table_hi = 'ftm_track_' + track.id + '_chan_4_patterns_hi:\n';
