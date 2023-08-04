@@ -4,7 +4,6 @@ const tohex = (x) => x.toString(16).padStart(2, '0');
 
 let output;
 let data = {};
-let inst = [];
 let track = [];
 let track_id = -1;
 
